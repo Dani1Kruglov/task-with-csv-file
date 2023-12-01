@@ -1,0 +1,1 @@
+database_dsn = "host=localhost port=5432 user=user password=root dbname=csv-task sslmode=disable"
