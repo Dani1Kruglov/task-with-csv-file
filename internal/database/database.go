@@ -2,16 +2,29 @@ package database
 
 import (
 	"csv-file/internal/config"
-	"database/sql"
+	"csv-file/internal/model"
 	_ "github.com/lib/pq"
-	"log"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
-func ConnectToDatabase() *sql.DB {
+func Connect() (*gorm.DB, error) {
 	conn := config.Get().DatabaseDSN
-	db, err := sql.Open("postgres", conn)
+	db, err := gorm.Open(postgres.Open(conn), &gorm.Config{})
 	if err != nil {
-		log.Fatalln(err)
+		return nil, err
 	}
-	return db
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, err
+	}
+	sqlDB.SetMaxIdleConns(10)
+	sqlDB.SetMaxOpenConns(1000)
+
+	err = db.AutoMigrate(&model.JobTitle{}, &model.Department{}, &model.WorkingDay{}, &model.Payment{}, &model.Worker{}, &model.WorkerHourlyPayment{}, &model.WorkerSalaryPayment{})
+	if err != nil {
+		return nil, err
+	}
+	return db, nil
 }

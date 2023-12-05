@@ -1,24 +1,58 @@
 package database
 
 import (
-	"database/sql"
-	"path/filepath"
+	"csv-file/internal/model"
+	"gorm.io/gorm"
+	"reflect"
+	"strconv"
 )
 
-func AddDataToDatabaseFromCSV(conn *sql.DB) error {
-	absPath, err := filepath.Abs("data.csv")
-	_, err = conn.Exec(`COPY users(name, job_titles, department, full_or_part_time, salary_or_hourly, typical_hours, annual_salary, hourly_rate) 
-FROM '` + absPath + `' WITH CSV HEADER DELIMITER ',';`)
-	if err != nil {
-		return err
+func CreateIndexForWorkersName(db *gorm.DB) {
+	db.Exec("CREATE INDEX IF NOT EXISTS name_lower_idx ON workers ((lower(name)));")
+}
+
+func AddDataToDatabaseFromCSV(db *gorm.DB, record []string) error {
+	jobTitleID, _ := addRecord(db, &model.JobTitle{}, record[1])
+	departmentID, _ := addRecord(db, &model.Department{}, record[2])
+	workingDayID, _ := addRecord(db, &model.WorkingDay{}, record[3])
+	paymentID, _ := addRecord(db, &model.Payment{}, record[4])
+	worker := model.Worker{
+		Name:             record[0],
+		JobTitlesID:      jobTitleID,
+		DepartmentID:     departmentID,
+		FullOrPartTimeID: workingDayID,
+		SalaryOrHourlyID: paymentID,
+	}
+	db.Create(&worker)
+	if record[4] == "SALARY" {
+		salary, err := strconv.ParseFloat(record[6], 2)
+		if err != nil {
+			return err
+		}
+		db.Create(&model.WorkerSalaryPayment{
+			WorkerID:     worker.ID,
+			AnnualSalary: salary,
+		})
+	} else if record[4] == "HOURLY" {
+		hours, err := strconv.Atoi(record[5])
+		rate, err := strconv.ParseFloat(record[7], 2)
+		if err != nil {
+			return err
+		}
+		db.Create(&model.WorkerHourlyPayment{
+			WorkerID:     worker.ID,
+			TypicalHours: hours,
+			HourlyRate:   rate,
+		})
 	}
 	return nil
 }
 
-func StoreIndexByUser(conn *sql.DB) error {
-	_, err := conn.Exec(`CREATE INDEX IF NOT EXISTS name_lower_idx ON users ((lower(name)))`)
-	if err != nil {
-		return err
+func addRecord(db *gorm.DB, model interface{}, title string) (uint, error) {
+	record := map[string]interface{}{"title": title}
+	result := db.FirstOrCreate(model, record)
+	if result.Error != nil {
+		return 0, result.Error
 	}
-	return nil
+	return uint(reflect.ValueOf(model).Elem().FieldByName("ID").Uint()), nil
 }

@@ -3,9 +3,10 @@ package work_with_command
 import (
 	"csv-file/internal/handler"
 	"fmt"
+	"gorm.io/gorm"
 )
 
-func WorkWithCSVByCommand() error {
+func WorkWithCSVByCommand(db *gorm.DB) error {
 	fmt.Println("Введите команду 'savetodb' для загрузки данных в базу данных")
 	var command string
 	_, err := fmt.Scan(&command)
@@ -20,7 +21,7 @@ func WorkWithCSVByCommand() error {
 			return err
 		}
 	}
-	err = handler.DataProcessing()
+	err = handler.DataProcessing(db)
 	if err != nil {
 		return err
 	}
