@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"gorm.io/gorm"
 	"os"
+	"sync"
 )
 
 func ReadCSVFileAndWriteInDB(db *gorm.DB) error {
@@ -24,19 +25,32 @@ func ReadCSVFileAndWriteInDB(db *gorm.DB) error {
 		panic("Error skipping first row")
 	}
 
+	var wg sync.WaitGroup
+	recordChan := make(chan []string, 5)
+
+	for i := 0; i < 5; i++ {
+		wg.Add(1)
+		go processRecords(db, &wg, recordChan)
+	}
 	for {
 		record, err := reader.Read()
 		if err != nil {
-			if err.Error() == "EOF" {
-				break
-			} else {
-				return err
-			}
+			close(recordChan)
+			break
 		}
-		err = database.AddDataToDatabaseFromCSV(db, record)
+		recordChan <- record
+	}
+
+	return nil
+}
+
+func processRecords(db *gorm.DB, wg *sync.WaitGroup, recordChan <-chan []string) {
+	defer wg.Done()
+
+	for record := range recordChan {
+		err := database.AddDataToDatabaseFromCSV(db, record)
 		if err != nil {
-			return err
+			panic(err)
 		}
 	}
-	return nil
 }
